@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "541981393565",
+    "project_id": "safedriver-1403d",
+    "storage_bucket": "safedriver-1403d.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:541981393565:android:868651fdac4b841cf14a74",
+        "android_client_info": {
+          "package_name": "com.Ishaan.car_speed"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB2hdPNltngxkZoVoO6BxoMT3UrMJZw2a0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

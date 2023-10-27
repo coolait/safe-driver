@@ -19,7 +19,7 @@ class OverpassRepository {
     var body = """
 [out:json][timeout:25];
 (
-  way(around:100,${position.latitude},${position.longitude}) ["maxspeed"];
+  way(around:10,${position.latitude},${position.longitude}) ["maxspeed"];
 );
 out body;
 >;

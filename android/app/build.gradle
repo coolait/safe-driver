@@ -2,6 +2,8 @@ plugins {
     id "com.android.application"
     id "kotlin-android"
     id "dev.flutter.flutter-gradle-plugin"
+    // Add the Google services Gradle plugin
+    //id "com.google.gms.google-services"
 }
 
 def localProperties = new Properties()
@@ -60,10 +62,18 @@ android {
             signingConfig signingConfigs.debug
         }
     }
+    buildTypes {
+        release {
+            minifyEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
 }
 
 flutter {
     source '../..'
 }
 
-dependencies {}
+dependencies {
+    implementation platform('com.google.firebase:firebase-bom:32.4.0')
+}

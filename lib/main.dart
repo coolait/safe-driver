@@ -8,6 +8,10 @@ import 'package:flutter_tts/flutter_tts.dart';
 import 'package:intl/intl.dart';
 import 'package:getwidget/getwidget.dart';
 import 'package:simple_rich_text/simple_rich_text.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:audioplayers/audioplayers.dart';
+//import 'package:audioplayers/audio_cache.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'OSMSpeedLimit.dart';
 
@@ -61,12 +65,40 @@ class _SpeedometerAppState extends State<SpeedometerApp> {
   double latit = 0.0;
   double longi = 0.0;
   int speedLimit = 0;
+  int adjSpeedLimit = 0;
   String roadName = 'N/A';
   Color buttonColor = Colors.blue; // Initial color
-  bool isPressedSound = false;
-  bool isPressedVo = false;
-  bool isPressedFo = false;
+  //bool isPressedSound = false;
+  //bool isPressedVo = false;
+  //bool isPressedFo = false;
+  //bool isPressedB5 = false;
+  //bool isPressedA5 = false;
+  //bool isPressedA10 = false;
+  bool isPressedInfi = false;
+  bool isPressedDoc = false;
+  bool isPressedStng = false;
+  int warnLevel=0;
+  int speedLmtlevel = 0;
+  List<bool> isSelected = [false,false,false]; // Represents the selected state of each button
+  List<bool> isSelected2 = [false,false,false];
+  final player  = AudioPlayer();
+/////FIREBASE- FIRESTORE
+  /*
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  Future<void> readCollection() async {
+    try {
+      QuerySnapshot querySnapshot = await _firestore.collection('RAKI').get();
+      List<QueryDocumentSnapshot> documents = querySnapshot.docs;
 
+      for (var doc in documents) {
+        Map<String, dynamic> data = doc.data() as Map<String, dynamic> ;
+        print('Document ID: ${doc.id}, Data: $data');
+      }
+    } catch (error) {
+      print('Error: $error');
+    }
+  }
+*/
   @override
   void initState() {
     super.initState();
@@ -84,6 +116,17 @@ class _SpeedometerAppState extends State<SpeedometerApp> {
 
     await flutterTts.speak(text);
   }
+
+  void playSound(String Alarm) async {
+
+    await player.setVolume(0.5);
+    print('got the alamrm {$Alarm}');
+    //int result = await player.play('assets/sound.mp3'); // Replace with your sound file path
+    await player.play(AssetSource(Alarm));
+    await Future.delayed(Duration(seconds:3));
+    player.stop();
+
+      }
 
 /*  void onPressed() {
 
@@ -135,21 +178,50 @@ class _SpeedometerAppState extends State<SpeedometerApp> {
       speedLimit = (await myOSM.getCarSpeedAt(position))!;
       roadName = (await myOSM.getRoadName())!;
       //speed = 30.0;
-      //print("Speed $speed");
-      //print("SpeedLmt $speedLimit");
-      //speedLimit = 0;
-      if (speedLimit == null) {
+      print("Speed $speed");
+      print("SpeedLmt $speedLimit");
+      adjSpeedLimit = speedLimit;
+      if (isSelected[0]) {
+        adjSpeedLimit = speedLimit - 5;
+      } else if (isSelected[1]) {
+        adjSpeedLimit = speedLimit + 5;
+      } else if (isSelected[2]) {
+        adjSpeedLimit = speedLimit + 10;
+      } else if (isPressedInfi) {
+        adjSpeedLimit = speedLimit + 10000;
+      }
+
+      if (adjSpeedLimit == null) {
         print("Did not get Speed-lmit");
-      } else if (speed > speedLimit!) {
+      } else if (speed > adjSpeedLimit!) {
         //print("voiced");
+        //Alert based on the setting user has picked
+      if (isSelected2[0]) {
+        //Sound only
+        playSound('sounds/streetalarm.wav');
+      } else if (isSelected2[1]) {
         speakText("You are Over Speed Limit");
         //print("Speed-limit $speedLimit");
+      }else if (isSelected2[2]) {
+        speakText("You are in Flash");
+        //print("Speed-limit $speedLimit");
+      }
       }
     });
 
-
   } // end init location service
 
+  void selectButton(int index) {
+    for (int i = 0; i < isSelected.length; i++) {
+      isSelected[i] = (i == index); // Select the button at the specified index and deselect others
+    }
+    isPressedInfi = false;
+  }
+  void selectButton2(int index) {
+    for (int i = 0; i < isSelected2.length; i++) {
+      isSelected2[i] = (i == index); // Select the button at the specified index and deselect others
+    }
+  }
   @override
   Widget build(BuildContext context) {
   //  return Scaffold(
@@ -160,7 +232,7 @@ class _SpeedometerAppState extends State<SpeedometerApp> {
      //   child: Column(
        return Container(
            //color: Colors.yellowAccent,
-           height: 400,
+           //height: 600,
            //width: 200,
            // Expanded
            child: Column(
@@ -198,36 +270,41 @@ class _SpeedometerAppState extends State<SpeedometerApp> {
               'Location  ${longi.toStringAsFixed(2)},${latit.toStringAsFixed(2)}  ',
               style: TextStyle(fontSize: 30),
             ),
-
+            SizedBox(height: 20.0),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly, // Align buttons evenly within the row
               children: <Widget>[
-                SizedBox(width: 8.0),
-                Expanded(
-                  child:ElevatedButton(
+                ToggleButtons(
+                  isSelected: isSelected2,
+                children: [
+                //SizedBox(width: 10.0),
+                  Container(
+                    margin: EdgeInsets.only(right: 20.0),
+                    child:  SizedBox(
+                  height: 80,
+                  width: 100,
+                    child:ElevatedButton(
                     child: Icon(
                       Icons.volume_up,
                       size: 55,
                     ),
                     style: ElevatedButton.styleFrom(
                         elevation: 5,
-                        backgroundColor: isPressedSound ? Colors.black : Colors.blue,
+                        backgroundColor: isSelected2[0] ? Colors.black : Colors.blue,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(15.0),
                           side:  BorderSide(
                             width: 5,
                             style: BorderStyle.solid,
-                            color: isPressedSound ? Colors.black : Colors.blueAccent,),
+                            color: isSelected2[0] ? Colors.black : Colors.blueAccent,),
                         )
                     ),
                     onPressed: () {// Add your action here
                       setState(() {
-                        isPressedSound = !isPressedSound;
+                        //isPressedSound = !isPressedSound;
+                        selectButton2(0);
                       });
                     },
-
-
-
 
                   ),
 /*                  child:GFIconButton(
@@ -242,27 +319,213 @@ class _SpeedometerAppState extends State<SpeedometerApp> {
 
                   ),*/
                 ),
-                SizedBox(width: 8.0),
-                Expanded(
-                  child:ElevatedButton(
-                    child: Icon(
+                  ),
+                //SizedBox(width: 8.0),
+                  Container(
+                    margin: EdgeInsets.only(right: 20.0),
+                    child:  SizedBox(
+                  height: 80,
+                  width: 100,
+                    child:ElevatedButton(
+                      child: Icon(
                       Icons.record_voice_over_sharp,
                       size: 55,
                     ),
                     style: ElevatedButton.styleFrom(
                         elevation: 5,
-                        backgroundColor: isPressedVo ? Colors.black : Colors.blue,
+                        backgroundColor: isSelected2[1] ? Colors.black : Colors.blue,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(15.0),
                           side:  BorderSide(
                             width: 5,
                             style: BorderStyle.solid,
-                            color: isPressedVo ? Colors.black : Colors.blueAccent,),
+                            color: isSelected2[1] ? Colors.black : Colors.blueAccent,),
                         )
                     ),
                     onPressed: () {// Add your action here
                       setState(() {
-                        isPressedVo = !isPressedVo;
+                        //isPressedVo = !isPressedVo;
+                        selectButton2(1);
+                      });
+                    },
+
+                  ),
+
+                ),
+                  ),
+                //SizedBox(width: 8.0),
+                  Container(
+                    margin: EdgeInsets.only(right: 0),
+                    child:  SizedBox(
+                  height: 80,
+                  width: 100,
+                    child:ElevatedButton(
+                    child: Icon(
+                      Icons.flash_on,
+                      size: 55,
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      elevation: 5,
+                      backgroundColor: isSelected2[2] ? Colors.black : Colors.blue,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(15.0),
+                      side:  BorderSide(
+                        width: 5,
+                        style: BorderStyle.solid,
+                        color: isSelected2[2] ? Colors.black : Colors.blueAccent,),
+                      )
+                      ),
+                    onPressed: () {// Add your action here
+                      setState(() {
+                        //isPressedFo = !isPressedFo;
+                        selectButton2(2);
+                      });
+                    },
+
+                  ),
+                    )
+                ),
+                  ],
+                )
+                //SizedBox(width: 8.0),
+              ],
+            ),
+            SizedBox(height: 20.0),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly, // Align buttons evenly within the row
+              children: <Widget>[
+                ToggleButtons(
+                  isSelected: isSelected,
+                  children:[
+                    //SizedBox(width: 10.0),
+                    Container(
+                      margin: EdgeInsets.only(right: 20.0),
+                      child: SizedBox(
+                        height: 80,
+                        width: 100,
+                        child:ElevatedButton(
+                          child: Text('-5',
+                            style: TextStyle(fontSize: 50),),
+                          style: ElevatedButton.styleFrom(
+                              elevation: 5,
+                              //backgroundColor: isPressedB5 ? Colors.black : Colors.blue,
+                              backgroundColor: isSelected[0] ? Colors.black : Colors.blue,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(15.0),
+                                side:  BorderSide(
+                                  width: 5,
+                                  style: BorderStyle.solid,
+                                  //color: isPressedB5 ? Colors.black : Colors.blueAccent,),
+                                  color: isSelected[0]? Colors.black : Colors.blueAccent,),
+                              )
+                          ),
+                          onPressed: () {// Add your action here
+                            setState(() {
+                              //isPressedB5 = !isPressedB5;
+                              selectButton(0);
+                              });
+                          },
+
+                        ),
+
+                    ),
+                    ),
+                    //SizedBox(width: 8.0),
+                    Container(
+                      margin: EdgeInsets.only(right: 20.0),
+                    child:  SizedBox(
+                      height: 80,
+                      width: 100,
+                      child:ElevatedButton(
+                        child: Text('+5',
+                          style: TextStyle(fontSize: 50),),
+                        style: ElevatedButton.styleFrom(
+                            elevation: 5,
+                            backgroundColor: isSelected[1] ? Colors.black : Colors.blue,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(15.0),
+                              side:  BorderSide(
+                                width: 5,
+                                style: BorderStyle.solid,
+                                color: isSelected[1] ? Colors.black : Colors.blueAccent,),
+                            )
+                        ),
+                        onPressed: () {// Add your action here
+                          setState(() {
+                            //isPressedA5 = !isPressedA5;
+                            selectButton(1);
+                          });
+                        },
+
+                      ),
+
+                    ),
+                    ),
+                    //const SizedBox(width: 2),
+                    Container(
+                      margin: EdgeInsets.only(right: 0),
+                      child:  SizedBox(
+                      height: 80,
+                      width: 100,
+                      child:ElevatedButton(
+                        child: Text('+10',
+                          style: TextStyle(fontSize: 40),),
+                        style: ElevatedButton.styleFrom(
+                            elevation: 5,
+                            backgroundColor: isSelected[2] ? Colors.black : Colors.blue,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(15.0),
+                              side:  BorderSide(
+                                width: 5,
+                                style: BorderStyle.solid,
+                                color: isSelected[2] ? Colors.black : Colors.blueAccent,),
+                            )
+                        ),
+                        onPressed: () {// Add your action here
+                          setState(() {
+                            //isPressedA10 = !isPressedA10;
+                            selectButton(2);
+                          });
+                        },
+
+                      ),
+                    ),
+                    )
+                    //SizedBox(width: 8.0),
+                  ],
+                ),
+              ],
+            ),
+            SizedBox(height: 20.0),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly, // Align buttons evenly within the row
+              children: <Widget>[
+                SizedBox(width: 10.0),
+                SizedBox(
+                  height: 80,
+                  width: 100,
+                  child:ElevatedButton(
+                    child: Icon(
+                      CupertinoIcons.infinite,
+                      size: 55,
+                    ),
+                    style: ElevatedButton.styleFrom(
+                        elevation: 5,
+                        backgroundColor: isPressedInfi ? Colors.black : Colors.blue,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(15.0),
+                          side:  BorderSide(
+                            width: 5,
+                            style: BorderStyle.solid,
+                            color: isPressedInfi ? Colors.black : Colors.blueAccent,),
+                        )
+                    ),
+                    onPressed: () {// Add your action here
+                      setState(() {
+                        isPressedInfi = !isPressedInfi;
+                        for (int i = 0; i < isSelected.length; i++) {
+                          isSelected[i] = false; //deselect
+                        }
                       });
                     },
 
@@ -270,43 +533,66 @@ class _SpeedometerAppState extends State<SpeedometerApp> {
 
 
                   ),
-/*                  child:GFIconButton(
-                    onPressed: () {// Add your action here
-                      setState(() {
-                        isPressed = !isPressed;
-                      });
-                    },
-                    //text:"primary",
-                    icon: Icon(Icons.record_voice_over_sharp),
-                    type: GFButtonType.solid,
-                    iconSize: 50,
-                    color: isPressed ? Colors.black : Colors.blue,
-                    shape: GFIconButtonShape.pills,
-                    padding: const EdgeInsets.all(5),
 
-                  ),*/
                 ),
                 SizedBox(width: 8.0),
-                Expanded(
+                SizedBox(
+                  height: 80,
+                  width: 100,
                   child:ElevatedButton(
                     child: Icon(
-                      Icons.flash_on,
+                      CupertinoIcons.doc_chart_fill,
                       size: 55,
                     ),
                     style: ElevatedButton.styleFrom(
-                      elevation: 5,
-                      backgroundColor: isPressedFo ? Colors.black : Colors.blue,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(15.0),
-                      side:  BorderSide(
-                        width: 5,
-                        style: BorderStyle.solid,
-                        color: isPressedFo ? Colors.black : Colors.blueAccent,),
-                      )
-                      ),
+                        elevation: 5,
+                        backgroundColor: isPressedDoc ? Colors.black : Colors.blue,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(15.0),
+                          side:  BorderSide(
+                            width: 5,
+                            style: BorderStyle.solid,
+                            color: isPressedDoc ? Colors.black : Colors.blueAccent,),
+                        )
+                    ),
                     onPressed: () {// Add your action here
                       setState(() {
-                        isPressedFo = !isPressedFo;
+                        //playSound('sounds/streetalarm.wav');
+                        //readCollection();
+                        isPressedDoc = !isPressedDoc;
+                      });
+                    },
+
+
+
+
+                  ),
+
+                ),
+                SizedBox(width: 8.0),
+                SizedBox(
+                  height: 80,
+                  width: 100,
+                  child:ElevatedButton(
+                    child: Icon(
+                      CupertinoIcons.settings_solid,
+                      size: 55,
+                    ),
+                    style: ElevatedButton.styleFrom(
+                        elevation: 5,
+                        backgroundColor: isPressedStng ? Colors.black : Colors.blue,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(15.0),
+                          side:  BorderSide(
+                            width: 5,
+                            style: BorderStyle.solid,
+                            color: isPressedStng ? Colors.black : Colors.blueAccent,),
+                        )
+                    ),
+                    onPressed: () {// Add your action here
+                      setState(() {
+                        playSound('sounds/policeOpSiren.mp3');
+                        isPressedStng = !isPressedStng;
                       });
                     },
 
@@ -336,7 +622,7 @@ class _DigitalClockState extends State<DigitalClock> {
 
   void _updateTime() {
     final now = DateTime.now();
-    final formattedTime = DateFormat('MMM dd yyyy,hh:mm:ss aaa').format(now); // Customize the time format as needed.
+    final formattedTime = DateFormat('MMM dd yyyy, hh:mm:ss aaa').format(now); // Customize the time format as needed.
     setState(() {
       _currentTime = formattedTime;
     });
