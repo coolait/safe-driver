@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:math';
 
 
+import 'package:car_speed/violationReport.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_tts/flutter_tts.dart';
@@ -11,12 +13,18 @@ import 'package:simple_rich_text/simple_rich_text.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:audioplayers/audioplayers.dart';
 //import 'package:audioplayers/audio_cache.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:torch_light/torch_light.dart';
+import 'package:flutter_sms/flutter_sms.dart';
+
 
 import 'OSMSpeedLimit.dart';
+import 'firestore_service.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
   runApp(MyApp());
+
 }
 
 class MyApp extends StatelessWidget {
@@ -61,7 +69,7 @@ class DigitalClock extends StatefulWidget {
 }
 
 class _SpeedometerAppState extends State<SpeedometerApp> {
-  double speed = 0.0;
+  int speed = 0;
   double latit = 0.0;
   double longi = 0.0;
   int speedLimit = 0;
@@ -82,23 +90,9 @@ class _SpeedometerAppState extends State<SpeedometerApp> {
   List<bool> isSelected = [false,false,false]; // Represents the selected state of each button
   List<bool> isSelected2 = [false,false,false];
   final player  = AudioPlayer();
-/////FIREBASE- FIRESTORE
-  /*
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  Future<void> readCollection() async {
-    try {
-      QuerySnapshot querySnapshot = await _firestore.collection('RAKI').get();
-      List<QueryDocumentSnapshot> documents = querySnapshot.docs;
 
-      for (var doc in documents) {
-        Map<String, dynamic> data = doc.data() as Map<String, dynamic> ;
-        print('Document ID: ${doc.id}, Data: $data');
-      }
-    } catch (error) {
-      print('Error: $error');
-    }
-  }
-*/
+  final FirestoreService _firestoreService = FirestoreService();
+
   @override
   void initState() {
     super.initState();
@@ -117,6 +111,31 @@ class _SpeedometerAppState extends State<SpeedometerApp> {
     await flutterTts.speak(text);
   }
 
+  Future<void> flickerTorch(Duration flickerDuration) async {
+    bool isFlickering = true;
+    Timer flickerTimer;
+
+    flickerTimer = Timer.periodic(Duration(milliseconds: 200), (Timer timer) async {
+      if (!isFlickering) {
+        timer.cancel();
+        return;
+      }
+
+      await TorchLight.enableTorch(); // Turn on the flashlight
+      await Future.delayed(Duration(milliseconds: 100)); // Keep it on for 100 milliseconds
+      await TorchLight.disableTorch(); // Turn off the flashlight
+      await Future.delayed(Duration(milliseconds: 100)); // Keep it off for 100 milliseconds
+    });
+
+    // Run the flicker for the specified duration
+    await Future.delayed(flickerDuration);
+
+    // Stop the flicker
+    isFlickering = false;
+    flickerTimer.cancel();
+  }
+
+
   void playSound(String Alarm) async {
 
     await player.setVolume(0.5);
@@ -127,6 +146,14 @@ class _SpeedometerAppState extends State<SpeedometerApp> {
     player.stop();
 
       }
+
+  void _sendSMS(String message, List<String> recipents) async {
+    String _result = await sendSMS(message: message, recipients: recipents)
+        .catchError((onError) {
+      print(onError);
+    });
+    print(_result);
+  }
 
 /*  void onPressed() {
 
@@ -157,13 +184,15 @@ class _SpeedometerAppState extends State<SpeedometerApp> {
     const LocationSettings locationOptions =
         LocationSettings(accuracy: LocationAccuracy.best, distanceFilter: 0);
 
-    Geolocator.getPositionStream(locationSettings: locationOptions)
+    Geolocator.getPositionStream(locationSettings: locationOptions,
+      )
         .listen((Position position) {
 
       setState(() {
+        //print('updating speed ${DateTime.now()}');
         // Update the speed whenever a new location is received
-        speed = position.speed;
-        speed = speed * 2.23694; //converting to mph
+        speed = (position.speed).toInt();
+        speed = (speed * 2.23694).toInt(); //converting to mph
         latit = position.latitude;
         longi = position.longitude;
         //print ('location is: ');
@@ -173,13 +202,31 @@ class _SpeedometerAppState extends State<SpeedometerApp> {
 
     Timer.periodic(const Duration(seconds: 2), (timer) async {
       var position = await Geolocator.getCurrentPosition();
+
       //setPosition(position);
+      setState(() {
+        speed = (position.speed).toInt();
+      });
       OverpassRepository myOSM = OverpassRepository();
       speedLimit = (await myOSM.getCarSpeedAt(position))!;
       roadName = (await myOSM.getRoadName())!;
       //speed = 30.0;
-      print("Speed $speed");
-      print("SpeedLmt $speedLimit");
+      //print("Speed $speed  ${DateTime.now()}");
+      //print("SpeedLmt $speedLimit");
+      //if the speed is > Speedlimit lets log violation
+      if(speed > speedLimit && speed > 10 ){
+        //write to Firebase build the map
+        // Call the method to write the document and pass the data map
+        Map<String, dynamic> userData = {
+          'Date': DateTime.now(),
+          'Road': roadName,
+          'Speed': speed,
+          'SpeedLimit': speedLimit,
+        };
+        _firestoreService.writeUserData(userData);
+      }
+
+
       adjSpeedLimit = speedLimit;
       if (isSelected[0]) {
         adjSpeedLimit = speedLimit - 5;
@@ -203,8 +250,9 @@ class _SpeedometerAppState extends State<SpeedometerApp> {
         speakText("You are Over Speed Limit");
         //print("Speed-limit $speedLimit");
       }else if (isSelected2[2]) {
-        speakText("You are in Flash");
-        //print("Speed-limit $speedLimit");
+        flickerTorch(Duration(seconds: 3));
+        //speakText("You are in Flash");
+
       }
       }
     });
@@ -546,13 +594,13 @@ class _SpeedometerAppState extends State<SpeedometerApp> {
                     ),
                     style: ElevatedButton.styleFrom(
                         elevation: 5,
-                        backgroundColor: isPressedDoc ? Colors.black : Colors.blue,
+                        backgroundColor: /*isPressedDoc ? Colors.black :*/ Colors.blue,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(15.0),
                           side:  BorderSide(
                             width: 5,
                             style: BorderStyle.solid,
-                            color: isPressedDoc ? Colors.black : Colors.blueAccent,),
+                            color:/* isPressedDoc ? Colors.black :*/ Colors.blueAccent,),
                         )
                     ),
                     onPressed: () {// Add your action here
@@ -560,6 +608,9 @@ class _SpeedometerAppState extends State<SpeedometerApp> {
                         //playSound('sounds/streetalarm.wav');
                         //readCollection();
                         isPressedDoc = !isPressedDoc;
+                        // Navigate to the new screen (TableScreen) when the button is clicked
+                        Navigator.of(context).push(MaterialPageRoute(builder: (context) => ViolationReport()));
+
                       });
                     },
 
@@ -589,11 +640,21 @@ class _SpeedometerAppState extends State<SpeedometerApp> {
                             color: isPressedStng ? Colors.black : Colors.blueAccent,),
                         )
                     ),
-                    onPressed: () {// Add your action here
-                      setState(() {
-                        playSound('sounds/policeOpSiren.mp3');
-                        isPressedStng = !isPressedStng;
-                      });
+                    onPressed: () async {// Add your action here
+
+                        //playSound('sounds/policeOpSiren.mp3');
+                        //flashTorch();
+                        //flickerTorch(Duration(seconds: 3));
+
+                        String message = "This is a test message from Drive Safe!";
+                        List<String> recipents = ["7343088276"];
+
+                        //_sendSMS(message, recipents);
+                        String _result = await sendSMS(message: message, recipients: recipents, sendDirect: true)
+                            .catchError((onError) {
+                          print(onError);
+                        });
+
                     },
 
 

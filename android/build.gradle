@@ -1,15 +1,15 @@
 buildscript {
     ext.kotlin_version = '1.7.10'
-    ext.gradle_version = '8.1.2'
+    ext.gradle_version = '7.4.2'
     repositories {
         google()
         mavenCentral()
     }
 
     dependencies {
-        classpath 'com.android.tools.build:gradle:8.1.2'
+        classpath 'com.android.tools.build:gradle:7.4.2'
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
-        //classpath 'com.google.gms.google-services:7.0.4'
+        classpath 'com.google.gms:google-services:4.4.0'
         //classpath 'com.google.gms.google-services:4.4.0'
     }
     //id 'com.google.gms.google-services' version '4.4.0' apply false
@@ -27,9 +27,14 @@ subprojects {
     project.buildDir = "${rootProject.buildDir}/${project.name}"
 }
 subprojects {
+
     project.evaluationDependsOn(':app')
+
 }
 
 tasks.register("clean", Delete) {
     delete rootProject.buildDir
+}
+tasks.register('plugins') {
+    // ...
 }

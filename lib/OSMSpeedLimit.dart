@@ -47,6 +47,6 @@ out skel qt;
       }
     }
 
-    return null;
+    return 0;
   }
 }
