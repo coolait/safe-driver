@@ -30,8 +30,10 @@ class _ViolationReportState extends State<ViolationReport> {
           DataTable(
             border: TableBorder.all(
               color: Colors.black,
-              width: 2.0,
+              width: 1.0,
             ),
+            columnSpacing: 40.0,
+            horizontalMargin: 2, // Adjust the horizontal margin
             columns: [
               DataColumn(label: Text('DateTime')),
               DataColumn(label: Text('Road')),
@@ -129,6 +131,8 @@ class _ViolationReportState extends State<ViolationReport> {
       Map<String, dynamic> documentData = doc.data() as Map<String, dynamic>;
       data.add(documentData);
     }
+    // Sort the data by 'Date' field in chronological order
+    data.sort((a, b) => (b['Date'] as Timestamp).compareTo(a['Date'] as Timestamp));
 
     setState(() {
       violationData = data;

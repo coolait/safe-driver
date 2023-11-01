@@ -6,7 +6,7 @@ class FullChartScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Full-Screen Chart'),
+        title: Text('Violation Chart'),
         leading: IconButton(
           icon: Icon(Icons.arrow_back),
           onPressed: () {

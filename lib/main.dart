@@ -1,14 +1,17 @@
 import 'dart:async';
 import 'dart:math';
+// import 'package:speedometer/speedometer.dart';
 
-
+import 'package:car_speed/settings_page.dart';
 import 'package:car_speed/violationReport.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:intl/intl.dart';
 import 'package:getwidget/getwidget.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:simple_rich_text/simple_rich_text.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:audioplayers/audioplayers.dart';
@@ -21,6 +24,7 @@ import 'OSMSpeedLimit.dart';
 import 'firestore_service.dart';
 
 void main() async {
+
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
   runApp(MyApp());
@@ -31,9 +35,24 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      debugShowCheckedModeBanner: false,
       home: Scaffold(
         appBar: AppBar(
-          title: Text('Drive Safe'),
+          toolbarHeight: 100.0,
+          title: Text('Safe-Driver',
+          style: TextStyle(
+            fontSize: 24.0,
+            fontWeight: FontWeight.bold,
+            fontFamily: 'Montserrat', // Use a custom font
+            color: Colors.white, // Set a custom text color
+          ),
+        ),
+          elevation: 0,
+          flexibleSpace: const Image(
+            image: NetworkImage(
+                'https://wallpaperaccess.com/full/1816185.jpg'),
+            fit: BoxFit.fill,
+          ),
         ),
         body: Column(
             //mainAxisAlignment: MainAxisAlignment.center,
@@ -88,8 +107,9 @@ class _SpeedometerAppState extends State<SpeedometerApp> {
   int warnLevel=0;
   int speedLmtlevel = 0;
   List<bool> isSelected = [false,false,false]; // Represents the selected state of each button
-  List<bool> isSelected2 = [false,false,false];
+  List<bool> isSelected2 = [true,false,false];
   final player  = AudioPlayer();
+  DateTime? _lastWriteTextstamp;
 
   final FirestoreService _firestoreService = FirestoreService();
 
@@ -191,8 +211,9 @@ class _SpeedometerAppState extends State<SpeedometerApp> {
       setState(() {
         //print('updating speed ${DateTime.now()}');
         // Update the speed whenever a new location is received
-        speed = (position.speed).toInt();
-        speed = (speed * 2.23694).toInt(); //converting to mph
+        double locSpeed = (position.speed * 2.23694);
+        if(locSpeed>2) locSpeed= locSpeed.ceilToDouble();
+        speed = (locSpeed ).toInt(); //converting to mph
         latit = position.latitude;
         longi = position.longitude;
         //print ('location is: ');
@@ -200,21 +221,28 @@ class _SpeedometerAppState extends State<SpeedometerApp> {
       });
     });
 
+    Timer.periodic(const Duration(milliseconds: 500), (timer) async {
+      var position = await Geolocator.getCurrentPosition();
+      double locSpeed = (position.speed * 2.23694);
+      if(locSpeed>2) locSpeed= locSpeed.ceilToDouble();
+      //setPosition(position);
+      setState(() {
+        speed = (locSpeed ).toInt(); //converting to mph
+      });
+    });
+
     Timer.periodic(const Duration(seconds: 2), (timer) async {
       var position = await Geolocator.getCurrentPosition();
 
-      //setPosition(position);
-      setState(() {
-        speed = (position.speed).toInt();
-      });
       OverpassRepository myOSM = OverpassRepository();
       speedLimit = (await myOSM.getCarSpeedAt(position))!;
       roadName = (await myOSM.getRoadName())!;
+
       //speed = 30.0;
       //print("Speed $speed  ${DateTime.now()}");
       //print("SpeedLmt $speedLimit");
       //if the speed is > Speedlimit lets log violation
-      if(speed > speedLimit && speed > 10 ){
+      if(speed > speedLimit && speed > 10 && speedLimit != 0 ){
         //write to Firebase build the map
         // Call the method to write the document and pass the data map
         Map<String, dynamic> userData = {
@@ -224,6 +252,34 @@ class _SpeedometerAppState extends State<SpeedometerApp> {
           'SpeedLimit': speedLimit,
         };
         _firestoreService.writeUserData(userData);
+        //wreckless driving
+        int calculatedThreshold = speedLimit;
+        final prefs = await SharedPreferences.getInstance();
+        // Retrieve the 'speedThreshold' from shared preferences.
+        String? speedThreshold = prefs.getString('speedThreshold');
+        if (speedThreshold != null) {
+          try {
+            int parsedSpeedThreshold = int.parse(speedThreshold);
+            calculatedThreshold += parsedSpeedThreshold;
+          } catch (e) {
+            // Handle the case where 'speedThreshold' is not a valid integer.
+            print('Error parsing speedThreshold: $e');
+          }
+        }
+        final currentTime = DateTime.now();
+        if(speed > calculatedThreshold && (_lastWriteTextstamp == null ||
+            currentTime.difference(_lastWriteTextstamp!).inMinutes >= 1)){
+          _lastWriteTextstamp = currentTime;
+          String message = "Kid is driving at reckless Speed:$speed in $speedLimit";
+          String? parentPhone = prefs.getString('parentPhoneNumber');
+          List<String> recipents = [parentPhone ?? ''];
+
+          //_sendSMS(message, recipents);
+          String _result = await sendSMS(message: message, recipients: recipents, sendDirect: true)
+              .catchError((onError) {
+            print(onError);
+          });
+        }
       }
 
 
@@ -238,14 +294,19 @@ class _SpeedometerAppState extends State<SpeedometerApp> {
         adjSpeedLimit = speedLimit + 10000;
       }
 
-      if (adjSpeedLimit == null) {
-        print("Did not get Speed-lmit");
+      if (adjSpeedLimit < 11) {
+        //print("Did not get Speed-lmit");
       } else if (speed > adjSpeedLimit!) {
         //print("voiced");
         //Alert based on the setting user has picked
       if (isSelected2[0]) {
         //Sound only
-        playSound('sounds/streetalarm.wav');
+        final prefs = await SharedPreferences.getInstance();
+        // Retrieve the 'speedThreshold' from shared preferences.
+        String? selectedSoundType = prefs.getString('selectedSoundType');
+        String defaultSoundType = 'sounds/streetalarm.wav';
+        String combinedSoundType = 'sounds/' + (selectedSoundType ?? defaultSoundType);
+        playSound(combinedSoundType);
       } else if (isSelected2[1]) {
         speakText("You are Over Speed Limit");
         //print("Speed-limit $speedLimit");
@@ -574,6 +635,10 @@ class _SpeedometerAppState extends State<SpeedometerApp> {
                         for (int i = 0; i < isSelected.length; i++) {
                           isSelected[i] = false; //deselect
                         }
+                        for (int i = 0; i < isSelected.length; i++) {
+                          isSelected2[i] = false; //deselect
+                        }
+
                       });
                     },
 
@@ -646,14 +711,14 @@ class _SpeedometerAppState extends State<SpeedometerApp> {
                         //flashTorch();
                         //flickerTorch(Duration(seconds: 3));
 
-                        String message = "This is a test message from Drive Safe!";
-                        List<String> recipents = ["7343088276"];
+                      // Navigate to the SettingsPage when the button is pressed
+                      Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => SettingsPage(),
+                          ),
+                      );
 
-                        //_sendSMS(message, recipents);
-                        String _result = await sendSMS(message: message, recipients: recipents, sendDirect: true)
-                            .catchError((onError) {
-                          print(onError);
-                        });
 
                     },
 
